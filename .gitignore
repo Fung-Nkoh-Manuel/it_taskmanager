@@ -1,0 +1,40 @@
+# ── Dependencies & packages ───────────────────────────────────
+vendor/
+node_modules/
+
+# ── Environment & credentials ─────────────────────────────────
+.env
+.env.local
+.env.production
+config/database.local.php
+
+# ── Uploaded files ────────────────────────────────────────────
+public/uploads/*
+!public/uploads/.gitkeep
+
+# ── Log files ─────────────────────────────────────────────────
+logs/*
+!logs/.gitkeep
+
+# ── OS generated files ────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+
+# ── IDE & editor files ────────────────────────────────────────
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# ── PHP specific ──────────────────────────────────────────────
+*.log
+*.cache
+
+# ── Deployment configs with real credentials ──────────────────
+php-fpm-pool.conf
+nginx.conf
