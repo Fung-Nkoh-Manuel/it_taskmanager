@@ -10,6 +10,7 @@ require_once ROOT_PATH . '/config/database.php';
 spl_autoload_register(function (string $class): void {
     $map = [
         'BaseController'          => ROOT_PATH . '/app/Controllers/BaseController.php',
+        'SubtaskController'       => ROOT_PATH . '/app/Controllers/SubtaskController.php',
         'AuthController'          => ROOT_PATH . '/app/Controllers/AuthController.php',
         'DashboardController'     => ROOT_PATH . '/app/Controllers/DashboardController.php',
         'TaskController'          => ROOT_PATH . '/app/Controllers/TaskController.php',
@@ -20,6 +21,7 @@ spl_autoload_register(function (string $class): void {
         'LogController'           => ROOT_PATH . '/app/Controllers/LogController.php',
         'ApiController'           => ROOT_PATH . '/app/Controllers/ApiController.php',
         'AuthMiddleware'          => ROOT_PATH . '/app/Middleware/AuthMiddleware.php',
+        'SubtaskModel'            => ROOT_PATH . '/app/Models/SubtaskModel.php',
         'BaseModel'               => ROOT_PATH . '/app/Models/BaseModel.php',
         'UserModel'               => ROOT_PATH . '/app/Models/UserModel.php',
         'TaskModel'               => ROOT_PATH . '/app/Models/TaskModel.php',

@@ -49,6 +49,12 @@ Router::post('/profile/password', 'ProfileController', 'updatePassword');
 // ─── Logs (admin) ────────────────────────────────────────────────────────────
 Router::get('/logs', 'LogController', 'index');
 
+// ─── Subtasks ────────────────────────────────────────────────────────────────
+Router::post('/tasks/{taskId}/subtasks',                        'SubtaskController', 'store');
+Router::post('/tasks/{taskId}/subtasks/{id}/complete',          'SubtaskController', 'complete');
+Router::post('/tasks/{taskId}/subtasks/{id}/reopen',            'SubtaskController', 'reopen');
+Router::post('/tasks/{taskId}/subtasks/{id}/delete',            'SubtaskController', 'destroy');
+
 // ─── API ─────────────────────────────────────────────────────────────────────
 Router::get( '/api/tasks',              'ApiController', 'index');
 Router::get( '/api/tasks/{id}',         'ApiController', 'show');

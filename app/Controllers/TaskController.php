@@ -33,14 +33,19 @@ class TaskController extends BaseController
 
         $result = $this->tasks->paginated($filters, $page, $userId, $role);
 
+        // Fetch subtask progress for all tasks on this page
+        $taskIds  = array_column($result['items'], 'id');
+        $progress = (new SubtaskModel())->progressForTasks($taskIds);
+
         $this->view('tasks/index', [
-            'tasks'   => $result['items'],
-            'total'   => $result['total'],
-            'pages'   => $result['pages'],
-            'page'    => $page,
-            'filters' => $filters,
-            'isTech'  => $isTech,
-            'users'   => $isTech ? (new UserModel())->allForSelect() : [],
+            'tasks'    => $result['items'],
+            'total'    => $result['total'],
+            'pages'    => $result['pages'],
+            'page'     => $page,
+            'filters'  => $filters,
+            'isTech'   => $isTech,
+            'users'    => $isTech ? (new UserModel())->allForSelect() : [],
+            'progress' => $progress,
         ]);
     }
 
@@ -58,6 +63,9 @@ class TaskController extends BaseController
             'comments'    => $this->tasks->getComments($task['id']),
             'attachments' => $this->tasks->getAttachments($task['id']),
             'history'     => $this->tasks->getHistory($task['id']),
+            'subtasks'    => (new SubtaskModel())->forTask($task['id']),
+            'progress'    => (new SubtaskModel())->progressForTask($task['id']),
+            'users'       => (new UserModel())->allForSelect(),
         ]);
     }
 

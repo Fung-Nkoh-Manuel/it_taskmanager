@@ -16,8 +16,8 @@ class DashboardController extends BaseController
             'stats'        => $taskModel->getStats($userId, $role),
             'monthlyStats' => $taskModel->getMonthlyStats(),
             'byPriority'   => $taskModel->getByPriority(),
-            'overdue'      => $taskModel->getOverdueTasks(),
-            'recentTasks'  => $taskModel->getRecentTasks(),
+            'overdue'      => $taskModel->getOverdueTasks(10, $userId, $role),
+            'recentTasks'  => $taskModel->getRecentTasks(6, $userId, $role),
             'statsByUser'  => $isAdmin ? $taskModel->getStatsByUser() : [],
             'isAdmin'      => $isAdmin,
         ]);

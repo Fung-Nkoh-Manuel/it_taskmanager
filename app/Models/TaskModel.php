@@ -196,27 +196,52 @@ class TaskModel extends BaseModel
         ");
     }
 
-    public function getOverdueTasks(int $limit = 10): array
+    public function getOverdueTasks(int $limit = 10, ?int $userId = null, string $role = 'admin'): array
     {
+        $where  = '';
+        $params = [];
+
+        if ($role === 'utilisateur' && $userId) {
+            $where    = 'AND (t.assigned_to = ? OR t.created_by = ?)';
+            $params[] = $userId;
+            $params[] = $userId;
+        }
+
+        $params[] = $limit;
+
         return $this->query("
             SELECT t.*, u.full_name AS assigned_name
             FROM tasks t
             LEFT JOIN users u ON u.id = t.assigned_to
-            WHERE t.status != 'termine' AND t.due_date < CURDATE()
+            WHERE t.status != 'termine'
+            AND t.due_date < CURDATE()
+            {$where}
             ORDER BY t.due_date ASC
             LIMIT ?
-        ", [$limit]);
+        ", $params);
     }
 
-    public function getRecentTasks(int $limit = 6): array
+    public function getRecentTasks(int $limit = 6, ?int $userId = null, string $role = 'admin'): array
     {
+        $where  = '';
+        $params = [];
+
+        if ($role === 'utilisateur' && $userId) {
+            $where    = 'WHERE t.assigned_to = ? OR t.created_by = ?';
+            $params[] = $userId;
+            $params[] = $userId;
+        }
+
+        $params[] = $limit;
+
         return $this->query("
             SELECT t.*, u.full_name AS assigned_name
             FROM tasks t
             LEFT JOIN users u ON u.id = t.assigned_to
+            {$where}
             ORDER BY t.created_at DESC
             LIMIT ?
-        ", [$limit]);
+        ", $params);
     }
 
     public function getStatsByUser(): array

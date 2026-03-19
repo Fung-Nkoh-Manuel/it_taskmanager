@@ -95,6 +95,19 @@
                                 </span>
                                 <?php endif; ?>
                             </div>
+                            <?php if (!empty($progress[$task['id']]) && $progress[$task['id']]['total'] > 0):
+                                $p = $progress[$task['id']]; ?>
+                            <div class="mt-1.5 flex items-center gap-2">
+                                <div class="flex-1 h-1.5 bg-slate-200 dark:bg-slate-600 rounded-full overflow-hidden">
+                                    <div class="h-1.5 rounded-full transition-all duration-300
+                                        <?= $p['percent'] >= 100 ? 'bg-green-500' : ($p['percent'] >= 50 ? 'bg-brand-500' : 'bg-yellow-400') ?>"
+                                         style="width:<?= $p['percent'] ?>%"></div>
+                                </div>
+                                <span class="text-xs text-slate-400 shrink-0">
+                                    <?= $p['done'] ?>/<?= $p['total'] ?>
+                                </span>
+                            </div>
+                            <?php endif; ?>
                         </td>
                         <td class="px-4 py-3.5 text-center hidden md:table-cell">
                             <span class="badge-<?= $task['priority'] ?> text-xs font-medium px-2.5 py-1 rounded-full capitalize">
