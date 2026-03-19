@@ -23,7 +23,13 @@ class CalendarController extends BaseController
         if (!preg_match('/^\d{4}-\d{2}-\d{2}/', $start)) $start = date('Y-m-01');
         if (!preg_match('/^\d{4}-\d{2}-\d{2}/', $end))   $end   = date('Y-m-t');
 
-        $tasks = (new TaskModel())->getForCalendar(substr($start, 0, 10), substr($end, 0, 10));
+        $taskModel = new TaskModel();
+        $tasks = $taskModel->getForCalendar(
+            substr($start, 0, 10),
+            substr($end, 0, 10),
+            $_SESSION['user_id'],
+            $_SESSION['user_role']
+        );
 
         $colors = [
             'critique' => '#ef4444',

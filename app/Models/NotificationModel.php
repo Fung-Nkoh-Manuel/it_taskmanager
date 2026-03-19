@@ -135,4 +135,24 @@ class NotificationModel extends BaseModel
             $this->create($u['id'], 'statut', "Task \"{$taskTitle}\" moved to: {$label}.", $taskId);
         }
     }
+    
+    public function notifyRoleChange(int $userId, string $oldRole, string $newRole): void
+    {
+        $labels = [
+            'utilisateur' => 'User',
+            'technicien'  => 'Technician',
+            'admin'       => 'Administrator',
+        ];
+
+        $old = $labels[$oldRole] ?? $oldRole;
+        $new = $labels[$newRole] ?? $newRole;
+
+        $this->create(
+            $userId,
+            'systeme',
+            "Your account role has been changed from {$old} to {$new}.",
+            null
+        );
+    }
+
 }

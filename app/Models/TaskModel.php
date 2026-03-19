@@ -236,16 +236,26 @@ class TaskModel extends BaseModel
         ");
     }
 
-    public function getForCalendar(string $start, string $end): array
+    public function getForCalendar(string $start, string $end, int $userId = 0, string $role = 'admin'): array
     {
+        $where  = '';
+        $params = [$end, $start];
+
+        if ($role === 'utilisateur') {
+            $where    = 'AND (t.assigned_to = ? OR t.created_by = ?)';
+            $params[] = $userId;
+            $params[] = $userId;
+        }
+
         return $this->query("
             SELECT t.*, u.full_name AS assigned_name
             FROM tasks t
             LEFT JOIN users u ON u.id = t.assigned_to
             WHERE t.start_date IS NOT NULL
-              AND t.start_date <= ?
-              AND (t.due_date IS NULL OR t.due_date >= ?)
-        ", [$end, $start]);
+            AND t.start_date <= ?
+            AND (t.due_date IS NULL OR t.due_date >= ?)
+            {$where}
+        ", $params);
     }
 
     // ── Comments ──────────────────────────────────────────────────────────────

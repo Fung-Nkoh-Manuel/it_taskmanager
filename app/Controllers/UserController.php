@@ -78,8 +78,19 @@ class UserController extends BaseController
             return;
         }
 
+        // Check if role changed before updating
+        $oldRole = $user['role'];
+        $newRole = $data['role'];
+
         $this->users->update($id, $data);
         $this->log->log('user_updated', $_SESSION['user_id'], 'user', $id);
+
+        // Notify user if their role was changed
+        if ($oldRole !== $newRole) {
+            $notifs = new NotificationModel();
+            $notifs->notifyRoleChange($id, $oldRole, $newRole);
+        }
+
         $this->flash('success', 'User updated.');
         $this->redirect('/users');
     }
