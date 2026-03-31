@@ -11,8 +11,16 @@ pipeline {
                 checkout scm
             }
         }
-        
-        stage('Deploy via WSL') {
+        stage('Debug - Test WSL Connection') {
+            steps {
+                withCredentials([string(credentialsId: 'server-password', variable: 'TEST_PASS')]) {
+                    bat """
+                        wsl bash -c "echo 'Testing connection...' && sshpass -p ${TEST_PASS} ssh -o StrictHostKeyChecking=no webadmin@10.13.14.164 'echo SSH works'"
+                    """
+                }
+            }
+        }
+                stage('Deploy via WSL') {
             steps {
                 withCredentials([string(credentialsId: 'server-password', variable: 'ANSIBLE_PASS')]) {
                     bat """
