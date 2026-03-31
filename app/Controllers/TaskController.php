@@ -66,6 +66,7 @@ class TaskController extends BaseController
             'subtasks'    => (new SubtaskModel())->forTask($task['id']),
             'progress'    => (new SubtaskModel())->progressForTask($task['id']),
             'users'       => (new UserModel())->allForSelect(),
+            'assignees'   => $this->tasks->getAssignees($task['id']),
         ]);
     }
 
@@ -76,8 +77,9 @@ class TaskController extends BaseController
         AuthMiddleware::requireTechOrAdmin();
 
         $this->view('tasks/form', [
-            'task'  => [],
-            'users' => (new UserModel())->allForSelect(),
+            'task'        => [],
+            'users'       => (new UserModel())->allForSelect(),
+            'assigneeIds' => [],
         ]);
     }
 
@@ -93,18 +95,27 @@ class TaskController extends BaseController
 
         if (!empty($errors)) {
             $this->view('tasks/form', [
-                'task'   => $data,
-                'users'  => (new UserModel())->allForSelect(),
-                'errors' => $errors,
+                'task'        => $data,
+                'users'       => (new UserModel())->allForSelect(),
+                'assigneeIds' => $this->collectAssignees(),
+                'errors'      => $errors,
             ]);
             return;
         }
 
         $id = $this->tasks->create($data, $_SESSION['user_id']);
+
+        // Sync multiple assignees
+        $assignees = $this->collectAssignees();
+        $this->tasks->syncAssignees($id, $assignees);
+
         $this->tasks->logHistory($id, $_SESSION['user_id'], 'Task created');
 
-        if (!empty($data['assigned_to'])) {
-            $this->notifs->notifyAssignment((int)$data['assigned_to'], $data['title'], $id);
+        // Notify all assigned users except the creator
+        foreach ($assignees as $uid) {
+            if ((int)$uid !== (int)$_SESSION['user_id']) {
+                $this->notifs->notifyAssignment((int)$uid, $data['title'], $id);
+            }
         }
 
         $this->log->log('task_created', $_SESSION['user_id'], 'task', $id, $data['title']);
@@ -118,12 +129,14 @@ class TaskController extends BaseController
     {
         AuthMiddleware::requireTechOrAdmin();
 
-        $task = $this->tasks->findWithUsers((int)$params['id']);
+        $id   = (int)$params['id'];
+        $task = $this->tasks->findWithUsers($id);
         if (!$task) { $this->notFound(); return; }
 
         $this->view('tasks/form', [
-            'task'  => $task,
-            'users' => (new UserModel())->allForSelect(),
+            'task'        => $task,
+            'users'       => (new UserModel())->allForSelect(),
+            'assigneeIds' => $this->tasks->getAssigneeIds($id),
         ]);
     }
 
@@ -143,22 +156,35 @@ class TaskController extends BaseController
 
         if (!empty($errors)) {
             $this->view('tasks/form', [
-                'task'   => array_merge($old, $data),
-                'users'  => (new UserModel())->allForSelect(),
-                'errors' => $errors,
+                'task'        => array_merge($old, $data),
+                'users'       => (new UserModel())->allForSelect(),
+                'assigneeIds' => $this->collectAssignees(),
+                'errors'      => $errors,
             ]);
             return;
         }
+
+        // Get old assignees BEFORE any changes — cast to int for reliable array_diff
+        $oldAssignees = array_map('intval', $this->tasks->getAssigneeIds($id));
 
         // Track changes for history
         $this->trackChanges($id, $old, $data);
 
         $this->tasks->update($id, $data);
 
-        // Notify on assignment or status change
-        if ($data['assigned_to'] && $data['assigned_to'] != $old['assigned_to']) {
-            $this->notifs->notifyAssignment((int)$data['assigned_to'], $data['title'], $id);
+        // Sync multiple assignees
+        $assignees = $this->collectAssignees();
+        $this->tasks->syncAssignees($id, $assignees);
+
+        // Notify only users who were NOT previously assigned
+        $newlyAdded = array_diff($assignees, $oldAssignees);
+        foreach ($newlyAdded as $uid) {
+            if ((int)$uid !== (int)$_SESSION['user_id']) {
+                $this->notifs->notifyAssignment((int)$uid, $data['title'], $id);
+            }
         }
+
+        // Notify on status change
         if ($data['status'] !== $old['status']) {
             $this->notifs->notifyStatusChange($id, $data['title'], $data['status'], $_SESSION['user_id']);
         }
@@ -293,14 +319,28 @@ class TaskController extends BaseController
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
+    private function collectAssignees(): array
+    {
+        // Support both multi-select array and single select
+        $raw = $_POST['assigned_users'] ?? [];
+        if (!is_array($raw)) $raw = [$raw];
+        return array_filter(array_map('intval', $raw));
+    }
+
     private function collectTaskInput(): array
     {
+        // Derive primary assigned_to from first selected user in the multi-select
+        $assignedUsers   = $_POST['assigned_users'] ?? [];
+        if (!is_array($assignedUsers)) $assignedUsers = [$assignedUsers];
+        $assignedUsers   = array_values(array_filter(array_map('intval', $assignedUsers)));
+        $primaryAssignee = !empty($assignedUsers) ? $assignedUsers[0] : null;
+
         return [
             'title'       => trim($_POST['title']       ?? ''),
             'description' => trim($_POST['description'] ?? ''),
             'priority'    => $_POST['priority']          ?? 'moyenne',
             'status'      => $_POST['status']            ?? 'a_faire',
-            'assigned_to' => $_POST['assigned_to']       ?: null,
+            'assigned_to' => $primaryAssignee,
             'start_date'  => $_POST['start_date']        ?: null,
             'due_date'    => $_POST['due_date']          ?: null,
         ];

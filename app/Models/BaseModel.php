@@ -74,15 +74,33 @@ class BaseModel
 
     // ── Pagination helper ─────────────────────────────────────────────────────
 
-    protected function paginate(string $sql, array $params, int $page, int $perPage = ITEMS_PER_PAGE): array
-    {
-        // Count total
-        $countSql  = preg_replace('/SELECT .+? FROM /is', 'SELECT COUNT(*) FROM ', $sql);
-        // Strip ORDER BY for count
-        $countSql  = preg_replace('/ORDER BY .+$/is', '', $countSql);
-        $stmt      = $this->db->prepare($countSql);
-        $stmt->execute($params);
-        $total     = (int) $stmt->fetchColumn();
+    /**
+     * @param string      $sql       Full SELECT query with ORDER BY
+     * @param array       $params    Bound parameters for both count and data query
+     * @param int         $page      Current page number
+     * @param int         $perPage   Items per page
+     * @param string|null $countSql  Optional explicit COUNT query (recommended when
+     *                               the main query uses GROUP BY or complex SELECTs)
+     */
+    protected function paginate(
+        string  $sql,
+        array   $params,
+        int     $page,
+        int     $perPage  = ITEMS_PER_PAGE,
+        ?string $countSql = null
+    ): array {
+        // If explicit countSql provided it uses no bound params (built with interpolation)
+        // If not provided, use the main SQL as a subquery wrapper
+        if ($countSql !== null) {
+            $countParams = [];
+        } else {
+            $countSql    = "SELECT COUNT(*) FROM (" . $sql . ") AS _pcount";
+            $countParams = $params;
+        }
+
+        $stmt = $this->db->prepare($countSql);
+        $stmt->execute($countParams);
+        $total = (int) $stmt->fetchColumn();
 
         // Fetch page
         $offset = ($page - 1) * $perPage;

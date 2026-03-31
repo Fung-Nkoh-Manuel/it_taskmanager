@@ -14,8 +14,8 @@ class DashboardController extends BaseController
         $this->view('dashboard/index', [
             'user'         => $this->getCurrentUser(),
             'stats'        => $taskModel->getStats($userId, $role),
-            'monthlyStats' => $taskModel->getMonthlyStats(),
-            'byPriority'   => $taskModel->getByPriority(),
+            'monthlyStats' => $taskModel->getMonthlyStats($userId, $role),
+            'byPriority'   => $taskModel->getByPriority($userId, $role),
             'overdue'      => $taskModel->getOverdueTasks(10, $userId, $role),
             'recentTasks'  => $taskModel->getRecentTasks(6, $userId, $role),
             'statsByUser'  => $isAdmin ? $taskModel->getStatsByUser() : [],

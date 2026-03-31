@@ -9,35 +9,84 @@ class TaskModel extends BaseModel
     public function paginated(array $filters, int $page, int $userId, string $role): array
     {
         [$sql, $params] = $this->buildFilterQuery($filters, $userId, $role);
-        return $this->paginate($sql, $params, $page);
+
+        // Build a clean count query that avoids GROUP_CONCAT and ORDER BY issues
+        $countSql = $this->buildCountQuery($filters, $userId, $role);
+
+        return $this->paginate($sql, $params, $page, ITEMS_PER_PAGE, $countSql);
+    }
+
+    /**
+     * Separate lightweight count query — no GROUP_CONCAT, no ORDER BY.
+     */
+    private function buildCountQuery(array $f, int $userId, string $role): string
+    {
+        $restricted = in_array($role, ['utilisateur', 'technicien'], true);
+
+        // Use INNER JOIN with user filter baked in when role is restricted
+        if ($restricted) {
+            $joinSql = 'INNER JOIN task_assignments ta ON ta.task_id = t.id
+                        AND (ta.user_id = ' . (int)$userId . ' OR t.created_by = ' . (int)$userId . ')';
+        } else {
+            $joinSql = 'LEFT JOIN task_assignments ta ON ta.task_id = t.id';
+        }
+
+        $sql = "
+            SELECT COUNT(DISTINCT t.id)
+            FROM tasks t
+            {$joinSql}
+            WHERE 1=1
+        ";
+
+        if (!empty($f['search'])) {
+            $like = addslashes('%' . $f['search'] . '%');
+            $sql .= " AND (t.title LIKE '{$like}' OR t.description LIKE '{$like}')";
+        }
+        if (!empty($f['status'])) {
+            $sql .= " AND t.status = '" . addslashes($f['status']) . "'";
+        }
+        if (!empty($f['priority'])) {
+            $sql .= " AND t.priority = '" . addslashes($f['priority']) . "'";
+        }
+        if (!empty($f['assigned_to'])) {
+            $sql .= ' AND ta.user_id = ' . (int)$f['assigned_to'];
+        }
+
+        return $sql;
     }
 
     public function countFiltered(array $filters = [], ?int $userId = null, string $role = 'admin'): int
     {
-        [$sql, $params] = $this->buildFilterQuery($filters, $userId ?? 0, $role);
-        $countSql = preg_replace('/SELECT .+? FROM /is', 'SELECT COUNT(*) FROM ', $sql);
-        $countSql = preg_replace('/ORDER BY .+$/is', '', $countSql);
-        $stmt = $this->db->prepare($countSql);
-        $stmt->execute($params);
+        $sql  = $this->buildCountQuery($filters, $userId ?? 0, $role);
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute();
         return (int) $stmt->fetchColumn();
     }
 
     private function buildFilterQuery(array $f, int $userId, string $role): array
     {
+        // For filtered roles, use INNER JOIN so only assigned tasks appear
+        $assignJoin = in_array($role, ['utilisateur', 'technicien'], true)
+            ? 'INNER JOIN task_assignments ta ON ta.task_id = t.id AND (ta.user_id = ? OR t.created_by = ?)'
+            : 'LEFT JOIN task_assignments ta ON ta.task_id = t.id';
+
         $sql = "
             SELECT t.*,
-                   u.full_name AS assigned_name,
-                   c.full_name AS creator_name
+                   u.full_name  AS assigned_name,
+                   c.full_name  AS creator_name,
+                   GROUP_CONCAT(DISTINCT ua.full_name ORDER BY ua.full_name SEPARATOR '|') AS all_assignees
             FROM tasks t
-            LEFT JOIN users u ON u.id = t.assigned_to
-            LEFT JOIN users c ON c.id = t.created_by
+            LEFT JOIN users u   ON u.id  = t.assigned_to
+            LEFT JOIN users c   ON c.id  = t.created_by
+            {$assignJoin}
+            LEFT JOIN users ua  ON ua.id = ta.user_id
             WHERE 1=1
         ";
+
         $params = [];
 
-        // Non-admins only see tasks assigned to them or created by them
-        if ($role === 'utilisateur') {
-            $sql     .= ' AND (t.assigned_to = ? OR t.created_by = ?)';
+        // Bind the INNER JOIN params first when role is restricted
+        if (in_array($role, ['utilisateur', 'technicien'], true)) {
             $params[] = $userId;
             $params[] = $userId;
         }
@@ -60,10 +109,11 @@ class TaskModel extends BaseModel
         }
 
         if (!empty($f['assigned_to'])) {
-            $sql     .= ' AND t.assigned_to = ?';
+            $sql     .= ' AND ta.user_id = ?';
             $params[] = $f['assigned_to'];
         }
 
+        $sql .= ' GROUP BY t.id';
         $sql .= ' ORDER BY FIELD(t.priority,"critique","haute","moyenne","basse"), t.created_at DESC';
 
         return [$sql, $params];
@@ -148,40 +198,126 @@ class TaskModel extends BaseModel
         $this->execute('DELETE FROM tasks WHERE id = ?', [$id]);
     }
 
+    // ── Assignments (many-to-many) ────────────────────────────────────────────
+
+    /**
+     * Get all users assigned to a task.
+     */
+    public function getAssignees(int $taskId): array
+    {
+        return $this->query("
+            SELECT u.id, u.full_name, u.role, u.username
+            FROM task_assignments ta
+            JOIN users u ON u.id = ta.user_id
+            WHERE ta.task_id = ?
+            ORDER BY u.full_name
+        ", [$taskId]);
+    }
+
+    /**
+     * Sync assignees — replaces all existing assignments with the new list.
+     * Also updates tasks.assigned_to to the first assignee for backward compat.
+     */
+    public function syncAssignees(int $taskId, array $userIds): void
+    {
+        // Remove all existing
+        $this->execute('DELETE FROM task_assignments WHERE task_id = ?', [$taskId]);
+
+        // Insert new ones
+        foreach ($userIds as $uid) {
+            $uid = (int)$uid;
+            if ($uid > 0) {
+                $this->execute(
+                    'INSERT IGNORE INTO task_assignments (task_id, user_id) VALUES (?, ?)',
+                    [$taskId, $uid]
+                );
+            }
+        }
+
+        // Keep tasks.assigned_to as first assignee for calendar/legacy queries
+        $first = !empty($userIds) ? (int)$userIds[0] : null;
+        $this->execute(
+            'UPDATE tasks SET assigned_to = ? WHERE id = ?',
+            [$first, $taskId]
+        );
+    }
+
+    /**
+     * Get assignee IDs only — useful for form pre-selection.
+     */
+    public function getAssigneeIds(int $taskId): array
+    {
+        $rows = $this->query(
+            'SELECT user_id FROM task_assignments WHERE task_id = ? ORDER BY created_at ASC',
+            [$taskId]
+        );
+        return array_column($rows, 'user_id');
+    }
+
+    /**
+     * Check if a user is assigned to a task.
+     */
+    public function isAssigned(int $taskId, int $userId): bool
+    {
+        return (bool) $this->queryOne(
+            'SELECT id FROM task_assignments WHERE task_id = ? AND user_id = ?',
+            [$taskId, $userId]
+        );
+    }
+
     // ── Dashboard stats ───────────────────────────────────────────────────────
 
     public function getStats(?int $userId = null, string $role = 'admin'): array
     {
+        $join   = '';
         $where  = '';
         $params = [];
 
-        if ($role === 'utilisateur' && $userId) {
-            $where  = 'WHERE assigned_to = ? OR created_by = ?';
+        if (in_array($role, ['utilisateur', 'technicien'], true) && $userId) {
+            $join   = 'LEFT JOIN task_assignments ta ON ta.task_id = t.id';
+            $where  = 'WHERE (ta.user_id = ? OR t.created_by = ?)';
             $params = [$userId, $userId];
         }
 
         $row = $this->queryOne("
             SELECT
-                COUNT(*) AS total,
-                SUM(status = 'en_cours') AS en_cours,
-                SUM(status = 'termine')  AS termine,
-                SUM(status = 'a_faire')  AS a_faire,
-                SUM(status = 'bloque')   AS bloque,
-                SUM(status != 'termine' AND due_date < CURDATE()) AS en_retard,
-                SUM(status != 'termine' AND due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)) AS urgentes
-            FROM tasks {$where}
+                COUNT(DISTINCT t.id) AS total,
+                SUM(t.status = 'en_cours') AS en_cours,
+                SUM(t.status = 'termine')  AS termine,
+                SUM(t.status = 'a_faire')  AS a_faire,
+                SUM(t.status = 'bloque')   AS bloque,
+                SUM(t.status != 'termine' AND t.due_date < CURDATE()) AS en_retard,
+                SUM(t.status != 'termine' AND t.due_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 3 DAY)) AS urgentes
+            FROM tasks t {$join} {$where}
         ", $params);
 
         return $row ?? [];
     }
 
-    public function getMonthlyStats(): array
+    public function getMonthlyStats(int $userId = 0, string $role = 'admin'): array
     {
+        $restricted = in_array($role, ['utilisateur', 'technicien'], true) && $userId;
+
+        if ($restricted) {
+            return $this->query("
+                SELECT
+                    DATE_FORMAT(t.created_at, '%b %Y') AS month,
+                    COUNT(DISTINCT t.id)               AS created,
+                    SUM(t.status = 'termine')          AS completed
+                FROM tasks t
+                INNER JOIN task_assignments ta ON ta.task_id = t.id
+                    AND (ta.user_id = ? OR t.created_by = ?)
+                WHERE t.created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
+                GROUP BY DATE_FORMAT(t.created_at, '%Y-%m')
+                ORDER BY DATE_FORMAT(t.created_at, '%Y-%m')
+            ", [$userId, $userId]);
+        }
+
         return $this->query("
             SELECT
                 DATE_FORMAT(created_at, '%b %Y') AS month,
-                COUNT(*) AS created,
-                SUM(status = 'termine') AS completed
+                COUNT(*)                          AS created,
+                SUM(status = 'termine')           AS completed
             FROM tasks
             WHERE created_at >= DATE_SUB(NOW(), INTERVAL 6 MONTH)
             GROUP BY DATE_FORMAT(created_at, '%Y-%m')
@@ -189,8 +325,20 @@ class TaskModel extends BaseModel
         ");
     }
 
-    public function getByPriority(): array
+    public function getByPriority(int $userId = 0, string $role = 'admin'): array
     {
+        $restricted = in_array($role, ['utilisateur', 'technicien'], true) && $userId;
+
+        if ($restricted) {
+            return $this->query("
+                SELECT t.priority, COUNT(DISTINCT t.id) AS total
+                FROM tasks t
+                INNER JOIN task_assignments ta ON ta.task_id = t.id
+                    AND (ta.user_id = ? OR t.created_by = ?)
+                GROUP BY t.priority
+            ", [$userId, $userId]);
+        }
+
         return $this->query("
             SELECT priority, COUNT(*) AS total FROM tasks GROUP BY priority
         ");
@@ -198,11 +346,13 @@ class TaskModel extends BaseModel
 
     public function getOverdueTasks(int $limit = 10, ?int $userId = null, string $role = 'admin'): array
     {
+        $join   = '';
         $where  = '';
         $params = [];
 
-        if ($role === 'utilisateur' && $userId) {
-            $where    = 'AND (t.assigned_to = ? OR t.created_by = ?)';
+        if (in_array($role, ['utilisateur', 'technicien'], true) && $userId) {
+            $join     = 'LEFT JOIN task_assignments ta ON ta.task_id = t.id';
+            $where    = 'AND (ta.user_id = ? OR t.created_by = ?)';
             $params[] = $userId;
             $params[] = $userId;
         }
@@ -210,12 +360,13 @@ class TaskModel extends BaseModel
         $params[] = $limit;
 
         return $this->query("
-            SELECT t.*, u.full_name AS assigned_name
+            SELECT DISTINCT t.*, u.full_name AS assigned_name
             FROM tasks t
             LEFT JOIN users u ON u.id = t.assigned_to
+            {$join}
             WHERE t.status != 'termine'
-            AND t.due_date < CURDATE()
-            {$where}
+              AND t.due_date < CURDATE()
+              {$where}
             ORDER BY t.due_date ASC
             LIMIT ?
         ", $params);
@@ -223,11 +374,13 @@ class TaskModel extends BaseModel
 
     public function getRecentTasks(int $limit = 6, ?int $userId = null, string $role = 'admin'): array
     {
+        $join   = '';
         $where  = '';
         $params = [];
 
-        if ($role === 'utilisateur' && $userId) {
-            $where    = 'WHERE t.assigned_to = ? OR t.created_by = ?';
+        if (in_array($role, ['utilisateur', 'technicien'], true) && $userId) {
+            $join     = 'LEFT JOIN task_assignments ta ON ta.task_id = t.id';
+            $where    = 'WHERE ta.user_id = ? OR t.created_by = ?';
             $params[] = $userId;
             $params[] = $userId;
         }
@@ -235,9 +388,10 @@ class TaskModel extends BaseModel
         $params[] = $limit;
 
         return $this->query("
-            SELECT t.*, u.full_name AS assigned_name
+            SELECT DISTINCT t.*, u.full_name AS assigned_name
             FROM tasks t
             LEFT JOIN users u ON u.id = t.assigned_to
+            {$join}
             {$where}
             ORDER BY t.created_at DESC
             LIMIT ?
@@ -263,23 +417,26 @@ class TaskModel extends BaseModel
 
     public function getForCalendar(string $start, string $end, int $userId = 0, string $role = 'admin'): array
     {
+        $join   = '';
         $where  = '';
         $params = [$end, $start];
 
-        if ($role === 'utilisateur') {
-            $where    = 'AND (t.assigned_to = ? OR t.created_by = ?)';
+        if (in_array($role, ['utilisateur', 'technicien'], true) && $userId) {
+            $join     = 'LEFT JOIN task_assignments ta ON ta.task_id = t.id';
+            $where    = 'AND (ta.user_id = ? OR t.created_by = ?)';
             $params[] = $userId;
             $params[] = $userId;
         }
 
         return $this->query("
-            SELECT t.*, u.full_name AS assigned_name
+            SELECT DISTINCT t.*, u.full_name AS assigned_name
             FROM tasks t
             LEFT JOIN users u ON u.id = t.assigned_to
+            {$join}
             WHERE t.start_date IS NOT NULL
-            AND t.start_date <= ?
-            AND (t.due_date IS NULL OR t.due_date >= ?)
-            {$where}
+              AND t.start_date <= ?
+              AND (t.due_date IS NULL OR t.due_date >= ?)
+              {$where}
         ", $params);
     }
 

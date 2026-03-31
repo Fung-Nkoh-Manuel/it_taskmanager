@@ -20,6 +20,13 @@ class Router
 
     public static function dispatch(): void
     {
+        // If the request is for an existing PHP file, serve it directly
+        $requestFile = $_SERVER['DOCUMENT_ROOT'] . parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+        if (file_exists($requestFile) && pathinfo($requestFile, PATHINFO_EXTENSION) === 'php') {
+            // Let PHP-FPM handle it directly
+            return;
+        }
+        
         $httpMethod = $_SERVER['REQUEST_METHOD'];
         $uri        = self::getUri();
 
@@ -50,7 +57,6 @@ class Router
         $message = 'Page not found.';
         require_once VIEW_PATH . '/partials/error.php';
     }
-
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private static function getUri(): string

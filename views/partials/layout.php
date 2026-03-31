@@ -175,13 +175,13 @@ $isActive    = fn(string $p) =>
         <a href="<?= APP_URL ?>/tasks" class="sidebar-link <?= $isActive('/tasks') ?>">
             <i data-lucide="check-square" class="w-4 h-4 shrink-0"></i> Tasks
             <?php
-                $tm  = new TaskModel();
-                $cnt = $tm->countFiltered(
-                    ['status' => 'a_faire'],
-                    $_SESSION['user_id'],
-                    $_SESSION['user_role']
-                );
-                ?>
+            $tm  = new TaskModel();
+            $cnt = $tm->countFiltered(
+                ['status' => 'a_faire'],
+                $_SESSION['user_id'],
+                $_SESSION['user_role']
+            );
+            ?>
             <?php if ($cnt > 0): ?>
             <span class="ml-auto bg-brand-600 text-white text-xs rounded-full px-2 py-0.5"><?= $cnt ?></span>
             <?php endif; ?>

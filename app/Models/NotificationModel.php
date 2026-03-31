@@ -45,45 +45,103 @@ class NotificationModel extends BaseModel
     }
 
     /**
-     * Generate deadline notifications for tasks due today, tomorrow, or in 3 days.
-     * Called on every authenticated page load (idempotent via duplicate check).
+     * Generate deadline notifications for tasks due today, tomorrow, in 3 days,
+     * or already overdue. Called on every authenticated page load (idempotent).
      */
     public function generateDeadlineAlerts(): void
     {
         if (empty($_SESSION['user_id'])) return;
 
+        // ── Upcoming deadline alerts (today, tomorrow, 3 days) ────────────────
         $dueSoon = $this->query("
-            SELECT t.id, t.title, t.due_date, t.assigned_to
+            SELECT t.id, t.title, t.due_date,
+                   ta.user_id AS assigned_to,
+                   t.created_by
             FROM tasks t
+            JOIN task_assignments ta ON ta.task_id = t.id
             WHERE t.status NOT IN ('termine')
-              AND t.due_date IN (CURDATE(), DATE_ADD(CURDATE(), INTERVAL 1 DAY), DATE_ADD(CURDATE(), INTERVAL 3 DAY))
-              AND t.assigned_to IS NOT NULL
+              AND t.due_date IN (
+                  CURDATE(),
+                  DATE_ADD(CURDATE(), INTERVAL 1 DAY),
+                  DATE_ADD(CURDATE(), INTERVAL 3 DAY)
+              )
         ");
 
         foreach ($dueSoon as $task) {
-            // Avoid duplicate notifications per task per day
-            $exists = $this->queryOne(
-                "SELECT id FROM notifications
-                 WHERE task_id = ? AND user_id = ? AND type = 'echeance'
-                   AND DATE(created_at) = CURDATE()",
-                [$task['id'], $task['assigned_to']]
+            $this->sendDeadlineNotif(
+                $task['assigned_to'],
+                $task['id'],
+                $task['title'],
+                $task['due_date'],
+                false
             );
-
-            if (!$exists) {
-                $diff    = (new DateTime($task['due_date']))->diff(new DateTime())->days;
-                $label   = match($diff) {
-                    0       => 'today',
-                    1       => 'tomorrow',
-                    default => "in {$diff} days",
-                };
-                $this->create(
-                    $task['assigned_to'],
-                    'echeance',
-                    "Task \"{$task['title']}\" is due {$label}.",
-                    $task['id']
-                );
-            }
         }
+
+        // ── Overdue alerts (past due date, not completed) ─────────────────────
+        // Notify both assignees and the task creator, once per day per user
+        $overdue = $this->query("
+            SELECT DISTINCT t.id, t.title, t.due_date,
+                   ta.user_id AS notif_user
+            FROM tasks t
+            JOIN task_assignments ta ON ta.task_id = t.id
+            WHERE t.status NOT IN ('termine')
+              AND t.due_date < CURDATE()
+
+            UNION
+
+            SELECT DISTINCT t.id, t.title, t.due_date,
+                   t.created_by AS notif_user
+            FROM tasks t
+            WHERE t.status NOT IN ('termine')
+              AND t.due_date < CURDATE()
+        ");
+
+        foreach ($overdue as $task) {
+            $this->sendDeadlineNotif(
+                $task['notif_user'],
+                $task['id'],
+                $task['title'],
+                $task['due_date'],
+                true
+            );
+        }
+    }
+
+    /**
+     * Send a single deadline or overdue notification.
+     * Idempotent — fires at most once per task per user per day.
+     */
+    private function sendDeadlineNotif(
+        int    $userId,
+        int    $taskId,
+        string $taskTitle,
+        string $dueDate,
+        bool   $isOverdue
+    ): void {
+        $exists = $this->queryOne(
+            "SELECT id FROM notifications
+             WHERE task_id = ? AND user_id = ? AND type = 'echeance'
+               AND DATE(created_at) = CURDATE()",
+            [$taskId, $userId]
+        );
+
+        if ($exists) return;
+
+        if ($isOverdue) {
+            $daysLate = (new DateTime())->diff(new DateTime($dueDate))->days;
+            $label    = $daysLate === 1 ? '1 day ago' : "{$daysLate} days ago";
+            $message  = "⚠️ Task \"{$taskTitle}\" is overdue — due date was {$label}.";
+        } else {
+            $diff    = (new DateTime($dueDate))->diff(new DateTime())->days;
+            $label   = match($diff) {
+                0       => 'today',
+                1       => 'tomorrow',
+                default => "in {$diff} days",
+            };
+            $message = "Task \"{$taskTitle}\" is due {$label}.";
+        }
+
+        $this->create($userId, 'echeance', $message, $taskId);
     }
 
     /**
@@ -99,13 +157,15 @@ class NotificationModel extends BaseModel
      */
     public function notifyComment(int $taskId, string $taskTitle, int $commenterId): void
     {
-        // Notify assignee and creator, but not the commenter
+        // Notify all assignees and creator, but not the commenter
         $users = $this->query("
             SELECT DISTINCT u.id
             FROM users u
-            JOIN tasks t ON (t.assigned_to = u.id OR t.created_by = u.id)
-            WHERE t.id = ? AND u.id != ?
-        ", [$taskId, $commenterId]);
+            LEFT JOIN task_assignments ta ON ta.user_id = u.id AND ta.task_id = ?
+            LEFT JOIN tasks t ON t.id = ?
+            WHERE (ta.task_id = ? OR u.id = t.created_by)
+              AND u.id != ?
+        ", [$taskId, $taskId, $taskId, $commenterId]);
 
         foreach ($users as $u) {
             $this->create($u['id'], 'commentaire', "New comment on task \"{$taskTitle}\".", $taskId);
@@ -117,12 +177,15 @@ class NotificationModel extends BaseModel
      */
     public function notifyStatusChange(int $taskId, string $taskTitle, string $newStatus, int $actorId): void
     {
+        // Notify all assignees and creator, but not the actor
         $users = $this->query("
             SELECT DISTINCT u.id
             FROM users u
-            JOIN tasks t ON (t.assigned_to = u.id OR t.created_by = u.id)
-            WHERE t.id = ? AND u.id != ?
-        ", [$taskId, $actorId]);
+            LEFT JOIN task_assignments ta ON ta.user_id = u.id AND ta.task_id = ?
+            LEFT JOIN tasks t ON t.id = ?
+            WHERE (ta.task_id = ? OR u.id = t.created_by)
+              AND u.id != ?
+        ", [$taskId, $taskId, $taskId, $actorId]);
 
         $label = match($newStatus) {
             'en_cours' => 'In Progress',

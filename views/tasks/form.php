@@ -65,15 +65,18 @@ $v = fn($f, $def='') => htmlspecialchars($task[$f] ?? $def);
             </h2>
 
             <div>
-                <label class="form-label">Assigned To</label>
-                <select name="assigned_to" class="form-input">
-                    <option value="">— Unassigned —</option>
+                <label class="form-label">Assign To
+                    <span class="text-slate-400 font-normal text-xs">(hold Ctrl / Cmd to select multiple)</span>
+                </label>
+                <select name="assigned_users[]" multiple class="form-input" style="height:auto;min-height:100px">
                     <?php foreach ($users as $u): ?>
-                    <option value="<?= $u['id'] ?>" <?= ($task['assigned_to']??'')==$u['id']?'selected':'' ?>>
+                    <option value="<?= $u['id'] ?>"
+                        <?= in_array($u['id'], $assigneeIds ?? []) ? 'selected' : '' ?>>
                         <?= htmlspecialchars($u['full_name']) ?> (<?= $u['role'] ?>)
                     </option>
                     <?php endforeach; ?>
                 </select>
+                <p class="text-xs text-slate-400 mt-1">Leave blank to leave unassigned</p>
             </div>
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">

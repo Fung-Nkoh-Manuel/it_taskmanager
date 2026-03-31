@@ -52,10 +52,6 @@ class SubtaskController extends BaseController
 
         $this->tasks->logHistory($taskId, $_SESSION['user_id'], 'Subtask added', 'subtask', null, $data['title']);
         $this->log->log('subtask_created', $_SESSION['user_id'], 'subtask', $id, $data['title']);
-
-        // Move parent task to in progress when first subtask is added
-        $this->subtasks->checkAutoComplete($taskId);
-
         $this->flash('success', 'Subtask added.');
         $this->redirect('/tasks/' . $taskId . '#subtasks');
     }
@@ -74,12 +70,15 @@ class SubtaskController extends BaseController
         if (!$subtask || $subtask['task_id'] != $taskId) { $this->abort(404); return; }
 
         // Only assigned user, technician, or admin can complete
-        $userId = $_SESSION['user_id'];
-        $role   = $_SESSION['user_role'];
-        if (
-            $subtask['assigned_to'] != $userId &&
-            !in_array($role, ['admin', 'technicien'], true)
-        ) {
+        $userId   = $_SESSION['user_id'];
+        $role     = $_SESSION['user_role'];
+        $taskModel = new TaskModel();
+
+        $canComplete = in_array($role, ['admin', 'technicien'], true)
+            || $subtask['assigned_to'] == $userId
+            || $taskModel->isAssigned($taskId, $userId);
+
+        if (!$canComplete) {
             $this->flash('error', 'You are not allowed to complete this subtask.');
             $this->redirect('/tasks/' . $taskId);
             return;
@@ -203,27 +202,7 @@ class SubtaskController extends BaseController
         }
 
         $this->subtasks->delete($id);
-
-        $this->tasks->logHistory(
-            $taskId,
-            $_SESSION['user_id'],
-            'Subtask deleted',
-            'subtask',
-            $subtask['title'],
-            null
-        );
-
-        $this->log->log(
-            'subtask_deleted',
-            $_SESSION['user_id'],
-            'subtask',
-            $id,
-            $subtask['title']
-        );
-
-        // If task was completed and now has unfinished subtasks, revert status
-        $this->subtasks->checkAutoComplete($taskId);
-
+        $this->tasks->logHistory($taskId, $_SESSION['user_id'], 'Subtask deleted', 'subtask', $subtask['title'], null);
         $this->flash('success', 'Subtask deleted.');
         $this->redirect('/tasks/' . $taskId . '#subtasks');
     }

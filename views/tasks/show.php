@@ -319,14 +319,16 @@ $sLabels     = ['a_faire'=>'To Do','en_cours'=>'In Progress','termine'=>'Complet
                     <?php foreach ($sLabels as $val => $lbl): ?>
                     <?php if ($val !== $task['status']): ?>
                     <form method="POST" action="<?= APP_URL ?>/tasks/<?= $task['id'] ?>">
-                        <input type="hidden" name="_csrf"       value="<?= $csrfToken ?>">
-                        <input type="hidden" name="title"       value="<?= htmlspecialchars($task['title']) ?>">
-                        <input type="hidden" name="description" value="<?= htmlspecialchars($task['description'] ?? '') ?>">
-                        <input type="hidden" name="priority"    value="<?= $task['priority'] ?>">
-                        <input type="hidden" name="status"      value="<?= $val ?>">
-                        <input type="hidden" name="assigned_to" value="<?= $task['assigned_to'] ?? '' ?>">
-                        <input type="hidden" name="start_date"  value="<?= $task['start_date'] ?? '' ?>">
-                        <input type="hidden" name="due_date"    value="<?= $task['due_date'] ?? '' ?>">
+                        <input type="hidden" name="_csrf"        value="<?= $csrfToken ?>">
+                        <input type="hidden" name="title"        value="<?= htmlspecialchars($task['title']) ?>">
+                        <input type="hidden" name="description"  value="<?= htmlspecialchars($task['description'] ?? '') ?>">
+                        <input type="hidden" name="priority"     value="<?= $task['priority'] ?>">
+                        <input type="hidden" name="status"       value="<?= $val ?>">
+                        <input type="hidden" name="start_date"   value="<?= $task['start_date'] ?? '' ?>">
+                        <input type="hidden" name="due_date"     value="<?= $task['due_date'] ?? '' ?>">
+                        <?php foreach ($assignees as $a): ?>
+                        <input type="hidden" name="assigned_users[]" value="<?= $a['id'] ?>">
+                        <?php endforeach; ?>
                         <button type="submit" class="text-xs status-<?= $val ?> px-3 py-1.5 rounded-lg font-medium hover:ring-2 hover:ring-offset-1 transition">
                             → <?= $lbl ?>
                         </button>
@@ -449,11 +451,17 @@ $sLabels     = ['a_faire'=>'To Do','en_cours'=>'In Progress','termine'=>'Complet
                 <div class="space-y-3 text-sm">
                     <div class="flex justify-between items-start gap-2">
                         <span class="text-slate-500">Assigned to</span>
-                        <span class="font-medium text-slate-900 dark:text-white text-right">
-                            <?= $task['assigned_name']
-                                ? htmlspecialchars($task['assigned_name'])
-                                : '<span class="text-slate-400 italic font-normal">Unassigned</span>' ?>
-                        </span>
+                        <div class="text-right">
+                            <?php if (!empty($assignees)): ?>
+                            <?php foreach ($assignees as $a): ?>
+                            <div class="font-medium text-slate-900 dark:text-white text-sm">
+                                <?= htmlspecialchars($a['full_name']) ?>
+                            </div>
+                            <?php endforeach; ?>
+                            <?php else: ?>
+                            <span class="text-slate-400 italic font-normal text-sm">Unassigned</span>
+                            <?php endif; ?>
+                        </div>
                     </div>
                     <div class="flex justify-between items-start gap-2">
                         <span class="text-slate-500">Created by</span>

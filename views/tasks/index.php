@@ -120,16 +120,33 @@
                             </span>
                         </td>
                         <td class="px-4 py-3.5 hidden lg:table-cell">
-                            <?php if ($task['assigned_name']): ?>
-                            <div class="flex items-center gap-2">
-                                <div class="w-6 h-6 rounded-full bg-brand-600/20 text-brand-600 flex items-center justify-center text-xs font-bold shrink-0">
-                                    <?= strtoupper(substr($task['assigned_name'], 0, 2)) ?>
+                            <?php
+                            $names = !empty($task['all_assignees'])
+                                ? explode('|', $task['all_assignees'])
+                                : [];
+                            ?>
+                            <?php if (!empty($names)): ?>
+                            <div class="flex items-center gap-1 flex-wrap">
+                                <?php foreach (array_slice($names, 0, 3) as $i => $name): ?>
+                                <div class="flex items-center gap-1.5"
+                                     title="<?= htmlspecialchars($name) ?>">
+                                    <div class="w-6 h-6 rounded-full bg-brand-600/20 text-brand-600 flex items-center justify-center text-xs font-bold shrink-0">
+                                        <?= strtoupper(substr($name, 0, 2)) ?>
+                                    </div>
+                                    <?php if (count($names) === 1): ?>
+                                    <span class="text-slate-700 dark:text-slate-300 truncate max-w-[100px] text-xs">
+                                        <?= htmlspecialchars($name) ?>
+                                    </span>
+                                    <?php endif; ?>
                                 </div>
-                                <span class="text-slate-700 dark:text-slate-300 truncate max-w-[120px]">
-                                    <?= htmlspecialchars($task['assigned_name']) ?>
-                                </span>
+                                <?php endforeach; ?>
+                                <?php if (count($names) > 3): ?>
+                                <span class="text-xs text-slate-400">+<?= count($names) - 3 ?></span>
+                                <?php endif; ?>
                             </div>
-                            <?php else: ?><span class="text-slate-400 text-xs italic">Unassigned</span><?php endif; ?>
+                            <?php else: ?>
+                            <span class="text-slate-400 text-xs italic">Unassigned</span>
+                            <?php endif; ?>
                         </td>
                         <td class="px-4 py-3.5 hidden xl:table-cell">
                             <?php if ($task['due_date']): ?>
