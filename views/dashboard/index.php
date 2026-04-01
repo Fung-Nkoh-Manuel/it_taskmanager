@@ -29,13 +29,16 @@
             'green'  => 'bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400',
             'red'    => 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400',
         ];
+        var_dump($stats);
+        exit;
+
         foreach ($cards as $card): ?>
         <div class="card p-5 flex items-start gap-4">
             <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 <?= $colorMap[$card['color']] ?>">
                 <i data-lucide="<?= $card['icon'] ?>" class="w-5 h-5"></i>
             </div>
             <div>
-                <div class="text-2xl font-bold text-slate-900 dark:text-white"><?= number_format($card['value']) ?></div>
+                <div class="text-2xl font-bold text-slate-900 dark:text-white"><?= number_format((int)$card['value']) ?></div>
                 <div class="text-sm font-medium text-slate-700 dark:text-slate-200"><?= $card['label'] ?></div>
                 <div class="text-xs text-slate-400"><?= $card['sub'] ?></div>
             </div>
@@ -60,7 +63,7 @@
                 <i data-lucide="<?= $s['icon'] ?>" class="w-5 h-5"></i>
             </div>
             <div>
-                <div class="text-xl font-bold"><?= $s['value'] ?></div>
+                <div class="text-xl font-bold"><?= (int)$s['value'] ?></div>
                 <div class="text-sm text-slate-500"><?= $s['label'] ?></div>
             </div>
         </div>

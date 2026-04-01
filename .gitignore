@@ -13,7 +13,7 @@ public/uploads/*
 !public/uploads/.gitkeep
 
 # ── Log files ─────────────────────────────────────────────────
-
+logs/*
 !logs/.gitkeep
 
 # ── OS generated files ────────────────────────────────────────
@@ -32,7 +32,7 @@ desktop.ini
 *.swo
 
 # ── PHP specific ──────────────────────────────────────────────
-
+*.log
 *.cache
 
 # ── Deployment configs with real credentials ──────────────────
