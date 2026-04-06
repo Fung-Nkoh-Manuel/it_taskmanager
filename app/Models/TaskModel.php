@@ -64,60 +64,72 @@ class TaskModel extends BaseModel
     }
 
     private function buildFilterQuery(array $f, int $userId, string $role): array
-    {
-        // For filtered roles, use INNER JOIN so only assigned tasks appear
-        $assignJoin = in_array($role, ['utilisateur', 'technicien'], true)
-            ? 'INNER JOIN task_assignments ta ON ta.task_id = t.id AND (ta.user_id = ? OR t.created_by = ?)'
-            : 'LEFT JOIN task_assignments ta ON ta.task_id = t.id';
+{
+    // For filtered roles, use INNER JOIN so only assigned tasks appear
+    $assignJoin = in_array($role, ['utilisateur', 'technicien'], true)
+        ? 'INNER JOIN task_assignments ta ON ta.task_id = t.id AND (ta.user_id = ? OR t.created_by = ?)'
+        : 'LEFT JOIN task_assignments ta ON ta.task_id = t.id';
 
-        $sql = "
-            SELECT t.*,
-                   u.full_name  AS assigned_name,
-                   c.full_name  AS creator_name,
-                   GROUP_CONCAT(DISTINCT ua.full_name ORDER BY ua.full_name SEPARATOR '|') AS all_assignees
-            FROM tasks t
-            LEFT JOIN users u   ON u.id  = t.assigned_to
-            LEFT JOIN users c   ON c.id  = t.created_by
-            {$assignJoin}
-            LEFT JOIN users ua  ON ua.id = ta.user_id
-            WHERE 1=1
-        ";
+    $sql = "
+        SELECT 
+            t.id,
+            ANY_VALUE(t.title) AS title,
+            ANY_VALUE(t.description) AS description,
+            ANY_VALUE(t.priority) AS priority,
+            ANY_VALUE(t.status) AS status,
+            ANY_VALUE(t.created_by) AS created_by,
+            ANY_VALUE(t.assigned_to) AS assigned_to,
+            ANY_VALUE(t.start_date) AS start_date,
+            ANY_VALUE(t.due_date) AS due_date,
+            ANY_VALUE(t.completed_at) AS completed_at,
+            ANY_VALUE(t.created_at) AS created_at,
+            ANY_VALUE(t.updated_at) AS updated_at,
+            ANY_VALUE(u.full_name) AS assigned_name,
+            ANY_VALUE(c.full_name) AS creator_name,
+            GROUP_CONCAT(DISTINCT ua.full_name ORDER BY ua.full_name SEPARATOR '|') AS all_assignees
+        FROM tasks t
+        LEFT JOIN users u   ON u.id  = t.assigned_to
+        LEFT JOIN users c   ON c.id  = t.created_by
+        {$assignJoin}
+        LEFT JOIN users ua  ON ua.id = ta.user_id
+        WHERE 1=1
+    ";
 
-        $params = [];
+    $params = [];
 
-        // Bind the INNER JOIN params first when role is restricted
-        if (in_array($role, ['utilisateur', 'technicien'], true)) {
-            $params[] = $userId;
-            $params[] = $userId;
-        }
-
-        if (!empty($f['search'])) {
-            $sql     .= ' AND (t.title LIKE ? OR t.description LIKE ?)';
-            $like     = '%' . $f['search'] . '%';
-            $params[] = $like;
-            $params[] = $like;
-        }
-
-        if (!empty($f['status'])) {
-            $sql     .= ' AND t.status = ?';
-            $params[] = $f['status'];
-        }
-
-        if (!empty($f['priority'])) {
-            $sql     .= ' AND t.priority = ?';
-            $params[] = $f['priority'];
-        }
-
-        if (!empty($f['assigned_to'])) {
-            $sql     .= ' AND ta.user_id = ?';
-            $params[] = $f['assigned_to'];
-        }
-
-        $sql .= ' GROUP BY t.id';
-        $sql .= ' ORDER BY FIELD(t.priority,"critique","haute","moyenne","basse"), t.created_at DESC';
-
-        return [$sql, $params];
+    // Bind the INNER JOIN params first when role is restricted
+    if (in_array($role, ['utilisateur', 'technicien'], true)) {
+        $params[] = $userId;
+        $params[] = $userId;
     }
+
+    if (!empty($f['search'])) {
+        $sql     .= ' AND (t.title LIKE ? OR t.description LIKE ?)';
+        $like     = '%' . $f['search'] . '%';
+        $params[] = $like;
+        $params[] = $like;
+    }
+
+    if (!empty($f['status'])) {
+        $sql     .= ' AND t.status = ?';
+        $params[] = $f['status'];
+    }
+
+    if (!empty($f['priority'])) {
+        $sql     .= ' AND t.priority = ?';
+        $params[] = $f['priority'];
+    }
+
+    if (!empty($f['assigned_to'])) {
+        $sql     .= ' AND ta.user_id = ?';
+        $params[] = $f['assigned_to'];
+    }
+
+    $sql .= ' GROUP BY t.id';
+    $sql .= ' ORDER BY FIELD(ANY_VALUE(t.priority),"critique","haute","moyenne","basse"), ANY_VALUE(t.created_at) DESC';
+
+    return [$sql, $params];
+}
 
     public function findWithUsers(int $id): ?array
     {

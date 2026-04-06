@@ -29,8 +29,6 @@
             'green'  => 'bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400',
             'red'    => 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400',
         ];
-        var_dump($stats);
-        exit;
 
         foreach ($cards as $card): ?>
         <div class="card p-5 flex items-start gap-4">
