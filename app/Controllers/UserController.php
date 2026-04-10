@@ -47,6 +47,16 @@ class UserController extends BaseController
         }
 
         $id = $this->users->create($data);
+
+        try {
+            $created = $this->users->find($id);
+            if ($created) {
+                EmailService::sendAccountCreated($created, (string)$data['password']);
+            }
+        } catch (Throwable $e) {
+            error_log('Account created email failed: ' . $e->getMessage());
+        }
+
         $this->log->log('user_created', $_SESSION['user_id'], 'user', $id, $data['username']);
         $this->flash('success', 'User created successfully.');
         $this->redirect('/users');
@@ -82,6 +92,9 @@ class UserController extends BaseController
         $oldRole = $user['role'];
         $newRole = $data['role'];
 
+        $hadPasswordChange = !empty($data['password']);
+        $oldActive         = (int)$user['is_active'];
+
         $this->users->update($id, $data);
         $this->log->log('user_updated', $_SESSION['user_id'], 'user', $id);
 
@@ -89,6 +102,34 @@ class UserController extends BaseController
         if ($oldRole !== $newRole) {
             $notifs = new NotificationModel();
             $notifs->notifyRoleChange($id, $oldRole, $newRole);
+
+            try {
+                $updated = $this->users->find($id);
+                if ($updated) {
+                    EmailService::sendRoleChanged($updated, $oldRole, $newRole);
+                }
+            } catch (Throwable $e) {
+                error_log('Role changed email failed: ' . $e->getMessage());
+            }
+        }
+
+        if ($hadPasswordChange) {
+            try {
+                EmailService::sendPasswordChangedAlert($id);
+            } catch (Throwable $e) {
+                error_log('Admin password-change email failed: ' . $e->getMessage());
+            }
+        }
+
+        if ((int)$data['is_active'] !== $oldActive) {
+            try {
+                $updated = $this->users->find($id);
+                if ($updated) {
+                    EmailService::sendAccountToggled($updated, (bool)$updated['is_active']);
+                }
+            } catch (Throwable $e) {
+                error_log('Account status email failed: ' . $e->getMessage());
+            }
         }
 
         $this->flash('success', 'User updated.');
@@ -121,6 +162,15 @@ class UserController extends BaseController
         if ($id !== $_SESSION['user_id']) {
             $this->users->toggle($id);
             $this->log->log('user_toggled', $_SESSION['user_id'], 'user', $id);
+
+            try {
+                $updated = $this->users->find($id);
+                if ($updated) {
+                    EmailService::sendAccountToggled($updated, (bool)$updated['is_active']);
+                }
+            } catch (Throwable $e) {
+                error_log('Toggle email failed: ' . $e->getMessage());
+            }
         }
         $this->redirect('/users');
     }

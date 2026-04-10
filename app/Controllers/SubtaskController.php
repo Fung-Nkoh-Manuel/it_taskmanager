@@ -148,6 +148,19 @@ class SubtaskController extends BaseController
         $autoCompleted = $this->subtasks->checkAutoComplete($taskId);
         if ($autoCompleted) {
             $this->notifs->notifyStatusChange($taskId, $subtask['task_title'], 'termine', $userId);
+
+            try {
+                EmailService::sendTaskStatusChanged($taskId, (string)$task['status'], 'termine');
+            } catch (Throwable $e) {
+                error_log('Auto-complete status email failed: ' . $e->getMessage());
+            }
+
+            try {
+                EmailService::sendSubtasksCompletedReadyForReview($taskId);
+            } catch (Throwable $e) {
+                error_log('Subtask completion email failed: ' . $e->getMessage());
+            }
+
             $this->flash('success', 'Subtask completed. All subtasks done — task marked as completed automatically!');
         } else {
             $progress = $this->subtasks->progressForTask($taskId);
