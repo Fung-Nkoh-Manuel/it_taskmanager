@@ -15,6 +15,7 @@ define('PUBLIC_PATH',  BASE_PATH . '/public');
 define('UPLOAD_PATH',  PUBLIC_PATH . '/uploads');
 define('LOG_PATH',     BASE_PATH . '/logs');
 define('UPLOADS_URL',  APP_URL . '/uploads');
+define('EMAIL_QUEUE_PATH', LOG_PATH . '/email_queue');
 
 // ─── Pagination ───────────────────────────────────────────────────────────────
 define('ITEMS_PER_PAGE', 15);
@@ -31,6 +32,17 @@ define('ALLOWED_MIME_TYPES', [
     'application/zip', 'application/x-zip-compressed',
     'text/plain', 'text/csv',
 ]);
+
+// ─── Email (SMTP or mail()) ─────────────────────────────────────────────────
+define('EMAIL_ENABLED', filter_var(getenv('EMAIL_ENABLED') ?: '0', FILTER_VALIDATE_BOOL));
+define('EMAIL_DRIVER', getenv('EMAIL_DRIVER') ?: 'smtp');
+define('SMTP_HOST', getenv('SMTP_HOST') ?: '');
+define('SMTP_PORT', (int)(getenv('SMTP_PORT') ?: 587));
+define('SMTP_USERNAME', getenv('SMTP_USERNAME') ?: '');
+define('SMTP_PASSWORD', getenv('SMTP_PASSWORD') ?: '');
+define('SMTP_ENCRYPTION', getenv('SMTP_ENCRYPTION') ?: 'tls'); // tls, ssl, none
+define('MAIL_FROM_ADDRESS', getenv('MAIL_FROM_ADDRESS') ?: '');
+define('MAIL_FROM_NAME', getenv('MAIL_FROM_NAME') ?: APP_NAME);
 
 // ─── Timezone ─────────────────────────────────────────────────────────────────
 date_default_timezone_set(getenv('APP_TIMEZONE') ?: 'Africa/Douala');
