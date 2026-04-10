@@ -112,6 +112,13 @@ class ProfileController extends BaseController
         }
 
         $this->users->update($id, ['password' => $new]);
+
+        try {
+            EmailService::sendPasswordChangedAlert($id);
+        } catch (Throwable $e) {
+            error_log('Profile password email failed: ' . $e->getMessage());
+        }
+
         $this->flash('success', 'Password changed successfully.');
         $this->redirect('/profile?tab=password');
     }

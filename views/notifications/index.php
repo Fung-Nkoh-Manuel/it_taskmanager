@@ -16,6 +16,16 @@
         <?php endif; ?>
     </div>
 
+    <?php if (AuthMiddleware::isAdmin()): ?>
+    <form method="POST" action="<?= APP_URL ?>/notifications/send-due-reminders" class="card p-3 flex items-center justify-between">
+        <input type="hidden" name="_csrf" value="<?= $csrfToken ?>">
+        <p class="text-sm text-slate-600 dark:text-slate-300">Trigger due-date reminder emails (next 24 hours)</p>
+        <button type="submit" class="btn-secondary text-xs">
+            <i data-lucide="send" class="w-3.5 h-3.5"></i> Send reminders
+        </button>
+    </form>
+    <?php endif; ?>
+
     <?php if (empty($notifications)): ?>
     <div class="card py-16 text-center">
         <i data-lucide="bell-off" class="w-12 h-12 text-slate-300 dark:text-slate-600 mx-auto mb-3"></i>

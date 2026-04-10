@@ -27,6 +27,7 @@ spl_autoload_register(function (string $class): void {
         'TaskModel'               => ROOT_PATH . '/app/Models/TaskModel.php',
         'NotificationModel'       => ROOT_PATH . '/app/Models/NotificationModel.php',
         'LogModel'                => ROOT_PATH . '/app/Models/LogModel.php',
+        'EmailService'            => ROOT_PATH . '/app/Services/EmailService.php',
         'Database'                => ROOT_PATH . '/config/database.php',
         'Router'                  => ROOT_PATH . '/routes/Router.php',
     ];
@@ -40,7 +41,7 @@ spl_autoload_register(function (string $class): void {
 session_start();
 
 // ─── Ensure upload/log dirs exist ────────────────────────────────────────────
-foreach ([UPLOAD_PATH, LOG_PATH] as $dir) {
+foreach ([UPLOAD_PATH, LOG_PATH, EMAIL_QUEUE_PATH] as $dir) {
     if (!is_dir($dir)) {
         mkdir($dir, 0755, true);
     }
