@@ -111,10 +111,21 @@ class TaskController extends BaseController
 
         $this->tasks->logHistory($id, $_SESSION['user_id'], 'Task created');
 
-        // Notify all assigned users except the creator
+        // Notify + email all newly assigned users (except the creator)
+        $userModel   = new UserModel();
+        $creatorName = $_SESSION['user_name'] ?? 'An administrator';
+        $taskData    = array_merge($data, ['id' => $id]);
+
         foreach ($assignees as $uid) {
             if ((int)$uid !== (int)$_SESSION['user_id']) {
+                // In-app notification
                 $this->notifs->notifyAssignment((int)$uid, $data['title'], $id);
+
+                // Email notification
+                $assignedUser = $userModel->find((int)$uid);
+                if ($assignedUser) {
+                    EmailNotifier::taskAssigned($assignedUser, $taskData, $creatorName);
+                }
             }
         }
 
@@ -147,8 +158,8 @@ class TaskController extends BaseController
         AuthMiddleware::requireTechOrAdmin();
         AuthMiddleware::verifyCsrf();
 
-        $id   = (int)$params['id'];
-        $old  = $this->tasks->findWithUsers($id);
+        $id  = (int)$params['id'];
+        $old = $this->tasks->findWithUsers($id);
         if (!$old) { $this->notFound(); return; }
 
         $data   = $this->collectTaskInput();
@@ -164,10 +175,11 @@ class TaskController extends BaseController
             return;
         }
 
-        // Get old assignees BEFORE any changes — cast to int for reliable array_diff
+        // Capture state before changes
         $oldAssignees = array_map('intval', $this->tasks->getAssigneeIds($id));
+        $oldStatus    = $old['status'];
 
-        // Track changes for history
+        // Track field changes for history
         $this->trackChanges($id, $old, $data);
 
         $this->tasks->update($id, $data);
@@ -176,17 +188,53 @@ class TaskController extends BaseController
         $assignees = $this->collectAssignees();
         $this->tasks->syncAssignees($id, $assignees);
 
-        // Notify only users who were NOT previously assigned
+        $userModel   = new UserModel();
+        $updaterName = $_SESSION['user_name'] ?? 'An administrator';
+        $taskData    = array_merge($data, ['id' => $id]);
+
+        // ── Notify + email newly added assignees ──────────────────────────────
         $newlyAdded = array_diff($assignees, $oldAssignees);
         foreach ($newlyAdded as $uid) {
             if ((int)$uid !== (int)$_SESSION['user_id']) {
                 $this->notifs->notifyAssignment((int)$uid, $data['title'], $id);
+
+                $assignedUser = $userModel->find((int)$uid);
+                if ($assignedUser) {
+                    EmailNotifier::taskAssigned($assignedUser, $taskData, $updaterName);
+                }
             }
         }
 
-        // Notify on status change
-        if ($data['status'] !== $old['status']) {
+        // ── Notify + email all current assignees on status change ─────────────
+        if ($data['status'] !== $oldStatus) {
             $this->notifs->notifyStatusChange($id, $data['title'], $data['status'], $_SESSION['user_id']);
+
+            foreach ($assignees as $uid) {
+                $assignedUser = $userModel->find((int)$uid);
+                if ($assignedUser) {
+                    EmailNotifier::taskStatusChanged(
+                        $assignedUser,
+                        $taskData,
+                        $oldStatus,
+                        $data['status'],
+                        $updaterName
+                    );
+                }
+            }
+
+            // Also email the task creator if they are not among the assignees
+            if (!empty($old['created_by']) && !in_array((int)$old['created_by'], $assignees, true)) {
+                $creator = $userModel->find((int)$old['created_by']);
+                if ($creator && (int)$creator['id'] !== (int)$_SESSION['user_id']) {
+                    EmailNotifier::taskStatusChanged(
+                        $creator,
+                        $taskData,
+                        $oldStatus,
+                        $data['status'],
+                        $updaterName
+                    );
+                }
+            }
         }
 
         $this->log->log('task_updated', $_SESSION['user_id'], 'task', $id, $data['title']);
@@ -261,14 +309,12 @@ class TaskController extends BaseController
 
         $file = $_FILES['attachment'];
 
-        // Validate size
         if ($file['size'] > MAX_UPLOAD_SIZE) {
             $this->flash('error', 'File exceeds the 10 MB limit.');
             $this->redirect('/tasks/' . $id . '#attachments');
             return;
         }
 
-        // Validate MIME
         $finfo    = new finfo(FILEINFO_MIME_TYPE);
         $mimeType = $finfo->file($file['tmp_name']);
 
@@ -278,7 +324,6 @@ class TaskController extends BaseController
             return;
         }
 
-        // Store with UUID filename
         $ext      = pathinfo($file['name'], PATHINFO_EXTENSION);
         $filename = bin2hex(random_bytes(16)) . ($ext ? '.' . strtolower($ext) : '');
         move_uploaded_file($file['tmp_name'], UPLOAD_PATH . '/' . $filename);
@@ -321,7 +366,6 @@ class TaskController extends BaseController
 
     private function collectAssignees(): array
     {
-        // Support both multi-select array and single select
         $raw = $_POST['assigned_users'] ?? [];
         if (!is_array($raw)) $raw = [$raw];
         return array_filter(array_map('intval', $raw));
@@ -329,7 +373,6 @@ class TaskController extends BaseController
 
     private function collectTaskInput(): array
     {
-        // Derive primary assigned_to from first selected user in the multi-select
         $assignedUsers   = $_POST['assigned_users'] ?? [];
         if (!is_array($assignedUsers)) $assignedUsers = [$assignedUsers];
         $assignedUsers   = array_values(array_filter(array_map('intval', $assignedUsers)));

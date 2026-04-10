@@ -9,6 +9,7 @@ require_once ROOT_PATH . '/config/database.php';
 // ─── Autoloader (simple PSR-4-style) ─────────────────────────────────────────
 spl_autoload_register(function (string $class): void {
     $map = [
+        // Controllers
         'BaseController'          => ROOT_PATH . '/app/Controllers/BaseController.php',
         'SubtaskController'       => ROOT_PATH . '/app/Controllers/SubtaskController.php',
         'AuthController'          => ROOT_PATH . '/app/Controllers/AuthController.php',
@@ -20,13 +21,19 @@ spl_autoload_register(function (string $class): void {
         'ProfileController'       => ROOT_PATH . '/app/Controllers/ProfileController.php',
         'LogController'           => ROOT_PATH . '/app/Controllers/LogController.php',
         'ApiController'           => ROOT_PATH . '/app/Controllers/ApiController.php',
+        // Middleware
         'AuthMiddleware'          => ROOT_PATH . '/app/Middleware/AuthMiddleware.php',
+        // Models
         'SubtaskModel'            => ROOT_PATH . '/app/Models/SubtaskModel.php',
         'BaseModel'               => ROOT_PATH . '/app/Models/BaseModel.php',
         'UserModel'               => ROOT_PATH . '/app/Models/UserModel.php',
         'TaskModel'               => ROOT_PATH . '/app/Models/TaskModel.php',
         'NotificationModel'       => ROOT_PATH . '/app/Models/NotificationModel.php',
         'LogModel'                => ROOT_PATH . '/app/Models/LogModel.php',
+        // Services
+        'Mailer'                  => ROOT_PATH . '/app/Services/Mailer.php',
+        'EmailNotifier'           => ROOT_PATH . '/app/Services/EmailNotifier.php',
+        // Infrastructure
         'Database'                => ROOT_PATH . '/config/database.php',
         'Router'                  => ROOT_PATH . '/routes/Router.php',
     ];
@@ -44,6 +51,12 @@ foreach ([UPLOAD_PATH, LOG_PATH] as $dir) {
     if (!is_dir($dir)) {
         mkdir($dir, 0755, true);
     }
+}
+
+// ─── Ensure Services dir exists ──────────────────────────────────────────────
+$servicesDir = ROOT_PATH . '/app/Services';
+if (!is_dir($servicesDir)) {
+    mkdir($servicesDir, 0755, true);
 }
 
 // ─── Load routes & dispatch ──────────────────────────────────────────────────

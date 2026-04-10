@@ -57,3 +57,21 @@ ini_set('session.use_strict_mode', 1);
 if (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on') {
     ini_set('session.cookie_secure', 1);
 }
+
+// ─── Mail ─────────────────────────────────────────────────────────────────────
+// Sender identity
+define('MAIL_FROM',       getenv('MAIL_FROM')       ?: '');
+define('MAIL_FROM_NAME',  getenv('MAIL_FROM_NAME')  ?: APP_NAME);
+
+// Admin address — receives system-level alerts (user created, toggled, etc.)
+define('MAIL_ADMIN',      getenv('MAIL_ADMIN')      ?: 'admin@yourdomain.com');
+
+// ── SMTP settings ─────────────────────────────────────────────────────────────
+// Leave MAIL_HOST empty ('') to fall back to PHP's built-in mail() function.
+// For Gmail: host=smtp.gmail.com  port=587  encryption=tls  (use an App Password)
+// For Mailtrap (testing): host=sandbox.smtp.mailtrap.io  port=2525  encryption=tls
+define('MAIL_HOST',       getenv('MAIL_HOST')       ?: '');
+define('MAIL_PORT',       getenv('MAIL_PORT')       ?: 587);
+define('MAIL_USERNAME',   getenv('MAIL_USERNAME')   ?: '');
+define('MAIL_PASSWORD',   getenv('MAIL_PASSWORD')   ?: '');
+define('MAIL_ENCRYPTION', getenv('MAIL_ENCRYPTION') ?: '');  // 'tls' or 'ssl'

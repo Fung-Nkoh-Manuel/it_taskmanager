@@ -48,6 +48,13 @@ class UserController extends BaseController
 
         $id = $this->users->create($data);
         $this->log->log('user_created', $_SESSION['user_id'], 'user', $id, $data['username']);
+
+        // Alert admin about new user creation
+        EmailNotifier::adminAlert(
+            'New user created',
+            "Username: {$data['username']}\nFull name: {$data['full_name']}\nEmail: {$data['email']}\nRole: {$data['role']}\nCreated by: " . ($_SESSION['user_name'] ?? 'Admin')
+        );
+
         $this->flash('success', 'User created successfully.');
         $this->redirect('/users');
     }
@@ -69,26 +76,41 @@ class UserController extends BaseController
         $user = $this->users->find($id);
         if (!$user) { $this->abort(404); return; }
 
-        $data             = $this->collectInput();
+        $data              = $this->collectInput();
         $data['is_active'] = isset($_POST['is_active']) ? 1 : 0;
-        $errors           = $this->validate($data, true, $id);
+        $errors            = $this->validate($data, true, $id);
 
         if (!empty($errors)) {
             $this->view('users/form', ['user' => array_merge($user, $data), 'errors' => $errors]);
             return;
         }
 
-        // Check if role changed before updating
-        $oldRole = $user['role'];
-        $newRole = $data['role'];
+        // Capture old state before any changes
+        $oldRole     = $user['role'];
+        $newRole     = $data['role'];
+        $wasActive   = (bool)(int)$user['is_active'];
+        $willBeActive = (bool)$data['is_active'];
+        $adminName   = $_SESSION['user_name'] ?? 'An administrator';
 
         $this->users->update($id, $data);
         $this->log->log('user_updated', $_SESSION['user_id'], 'user', $id);
 
-        // Notify user if their role was changed
+        // In-app + email notification on role change
         if ($oldRole !== $newRole) {
             $notifs = new NotificationModel();
             $notifs->notifyRoleChange($id, $oldRole, $newRole);
+
+            // Email the affected user
+            EmailNotifier::userRoleChanged($user, $oldRole, $newRole, $adminName);
+        }
+
+        // Email notification on account activation/deactivation
+        if ($wasActive !== $willBeActive) {
+            EmailNotifier::userStatusChanged(
+                array_merge($user, $data),
+                $willBeActive,
+                $adminName
+            );
         }
 
         $this->flash('success', 'User updated.');
@@ -119,11 +141,26 @@ class UserController extends BaseController
 
         $id = (int)$p['id'];
         if ($id !== $_SESSION['user_id']) {
+            // Fetch before toggling so we know the current state
+            $user      = $this->users->find($id);
+            $wasActive = $user ? (bool)(int)$user['is_active'] : true;
+
             $this->users->toggle($id);
             $this->log->log('user_toggled', $_SESSION['user_id'], 'user', $id);
+
+            // Email notification for the status change
+            if ($user) {
+                EmailNotifier::userStatusChanged(
+                    $user,
+                    !$wasActive,   // now the opposite
+                    $_SESSION['user_name'] ?? 'An administrator'
+                );
+            }
         }
         $this->redirect('/users');
     }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
 
     private function collectInput(): array
     {
