@@ -3,6 +3,33 @@
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
 define('ROOT_PATH', dirname(__DIR__));
 
+// ─── Load .env file if it exists ─────────────────────────────────────────────
+$envFile = ROOT_PATH . '/.env';
+if (is_file($envFile)) {
+    $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        // Skip comments
+        if (strpos(trim($line), '#') === 0) continue;
+        
+        // Parse KEY=VALUE
+        if (strpos($line, '=') !== false) {
+            list($key, $value) = explode('=', $line, 2);
+            $key = trim($key);
+            $value = trim($value);
+            
+            // Strip quotes if present
+            if (($value[0] ?? null) === '"' && ($value[-1] ?? null) === '"') {
+                $value = substr($value, 1, -1);
+            } elseif (($value[0] ?? null) === "'" && ($value[-1] ?? null) === "'") {
+                $value = substr($value, 1, -1);
+            }
+            
+            // Set as environment variable
+            putenv("{$key}={$value}");
+        }
+    }
+}
+
 require_once ROOT_PATH . '/config/app.php';
 require_once ROOT_PATH . '/config/database.php';
 

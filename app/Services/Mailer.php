@@ -21,6 +21,11 @@ class Mailer
             return false;
         }
 
+        if (empty(MAIL_FROM)) {
+            error_log("Mailer: MAIL_FROM is empty — check .env or config/app.php");
+            return false;
+        }
+
         $fromEmail = MAIL_FROM;
         $fromName  = MAIL_FROM_NAME;
         $plainText = self::htmlToText($htmlBody);
@@ -47,8 +52,11 @@ class Mailer
 
         // ── Try SMTP if configured, fall back to mail() ───────────────────────
         if (defined('MAIL_HOST') && MAIL_HOST) {
+            error_log("Mailer: Attempting SMTP connection to " . MAIL_HOST . ":" . MAIL_PORT);
             return self::sendSmtp($toEmail, $toName, $subject, $htmlBody, $plainText, $fromEmail, $fromName);
         }
+
+        error_log("Mailer: MAIL_HOST not configured, using PHP mail() function");
 
         $result = @mail($to, $encodedSubject, $body, $headers);
 
