@@ -86,13 +86,7 @@
         </p>
     </div>
 
-    <div class="mt-4 bg-white/5 border border-white/10 rounded-xl p-4 text-xs text-slate-400">
-        <p class="font-medium text-slate-300 mb-2">Demo accounts:</p>
-        <div class="grid grid-cols-2 gap-2">
-            <div><span class="text-blue-400">admin</span> / password</div>
-            <div><span class="text-green-400">technicien1</span> / password</div>
-        </div>
-    </div>
+  
 </div>
 
 <script>lucide.createIcons();</script>
