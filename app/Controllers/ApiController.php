@@ -104,23 +104,6 @@ class ApiController extends BaseController
         }
 
         $id = $this->tasks->create($body, $_SESSION['user_id']);
-
-        if (!empty($body['assigned_to'])) {
-            try {
-                EmailService::sendTaskAssigned((int)$body['assigned_to'], $id);
-            } catch (Throwable $e) {
-                error_log('API assignment email failed: ' . $e->getMessage());
-            }
-        }
-
-        if (in_array((string)($body['priority'] ?? ''), ['critique', 'haute'], true)) {
-            try {
-                EmailService::sendHighPriorityTaskCreatedAdminSummary($id);
-            } catch (Throwable $e) {
-                error_log('API high priority summary email failed: ' . $e->getMessage());
-            }
-        }
-
         $this->json(['id' => $id, 'message' => 'Task created'], 201);
     }
 
@@ -168,15 +151,6 @@ class ApiController extends BaseController
         ], $body);
 
         $this->tasks->update($id, $merged);
-
-        if (($merged['status'] ?? '') !== ($task['status'] ?? '')) {
-            try {
-                EmailService::sendTaskStatusChanged($id, (string)$task['status'], (string)$merged['status']);
-            } catch (Throwable $e) {
-                error_log('API status email failed: ' . $e->getMessage());
-            }
-        }
-
         $this->json(['message' => 'Task updated']);
     }
 
@@ -206,17 +180,10 @@ class ApiController extends BaseController
             return;
         }
 
-        $oldStatus = (string)($task['status'] ?? '');
         $this->tasks->updateStatus($id, $status);
 
         $notifs = new NotificationModel();
         $notifs->notifyStatusChange($id, $task['title'], $status, $_SESSION['user_id']);
-
-        try {
-            EmailService::sendTaskStatusChanged($id, $oldStatus, $status);
-        } catch (Throwable $e) {
-            error_log('API status-change email failed: ' . $e->getMessage());
-        }
 
         $this->json(['message' => 'Status updated', 'status' => $status]);
     }

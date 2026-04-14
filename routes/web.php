@@ -40,7 +40,6 @@ Router::post('/users/{id}/toggle',      'UserController', 'toggle');
 Router::get( '/notifications',              'NotificationController', 'index');
 Router::post('/notifications/read-all',     'NotificationController', 'readAll');
 Router::post('/notifications/read/{id}',    'NotificationController', 'markRead');
-Router::post('/notifications/send-due-reminders', 'NotificationController', 'sendDueReminders');
 
 // ─── Profile ─────────────────────────────────────────────────────────────────
 Router::get( '/profile',          'ProfileController', 'index');

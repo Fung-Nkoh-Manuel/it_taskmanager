@@ -32,20 +32,4 @@ class NotificationController extends BaseController
         $this->notifs->markAllRead($_SESSION['user_id']);
         $this->redirect('/notifications');
     }
-
-    public function sendDueReminders(): void
-    {
-        AuthMiddleware::requireAdmin();
-        AuthMiddleware::verifyCsrf();
-
-        $queued = 0;
-        try {
-            $queued = EmailService::sendDueDateReminders();
-        } catch (Throwable $e) {
-            error_log('Due reminder trigger failed: ' . $e->getMessage());
-        }
-
-        $this->flash('success', "Due date reminder emails queued: {$queued}.");
-        $this->redirect('/notifications');
-    }
 }

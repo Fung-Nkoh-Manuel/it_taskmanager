@@ -115,19 +115,6 @@ class TaskController extends BaseController
         foreach ($assignees as $uid) {
             if ((int)$uid !== (int)$_SESSION['user_id']) {
                 $this->notifs->notifyAssignment((int)$uid, $data['title'], $id);
-                try {
-                    EmailService::sendTaskAssigned((int)$uid, $id);
-                } catch (Throwable $e) {
-                    error_log('Task assignment email failed: ' . $e->getMessage());
-                }
-            }
-        }
-
-        if (in_array($data['priority'], ['critique', 'haute'], true)) {
-            try {
-                EmailService::sendHighPriorityTaskCreatedAdminSummary($id);
-            } catch (Throwable $e) {
-                error_log('High-priority admin summary email failed: ' . $e->getMessage());
             }
         }
 
@@ -194,22 +181,12 @@ class TaskController extends BaseController
         foreach ($newlyAdded as $uid) {
             if ((int)$uid !== (int)$_SESSION['user_id']) {
                 $this->notifs->notifyAssignment((int)$uid, $data['title'], $id);
-                try {
-                    EmailService::sendTaskAssigned((int)$uid, $id);
-                } catch (Throwable $e) {
-                    error_log('Task reassignment email failed: ' . $e->getMessage());
-                }
             }
         }
 
         // Notify on status change
         if ($data['status'] !== $old['status']) {
             $this->notifs->notifyStatusChange($id, $data['title'], $data['status'], $_SESSION['user_id']);
-            try {
-                EmailService::sendTaskStatusChanged($id, (string)$old['status'], (string)$data['status']);
-            } catch (Throwable $e) {
-                error_log('Task status email failed: ' . $e->getMessage());
-            }
         }
 
         $this->log->log('task_updated', $_SESSION['user_id'], 'task', $id, $data['title']);
@@ -260,12 +237,6 @@ class TaskController extends BaseController
         $this->tasks->addComment($id, $_SESSION['user_id'], $content);
         $this->notifs->notifyComment($id, $task['title'], $_SESSION['user_id']);
         $this->tasks->logHistory($id, $_SESSION['user_id'], 'Comment added');
-
-        try {
-            EmailService::sendNewComment($id, (int)$_SESSION['user_id'], $content);
-        } catch (Throwable $e) {
-            error_log('Comment email failed: ' . $e->getMessage());
-        }
 
         $this->redirect('/tasks/' . $id . '#comments');
     }
@@ -320,13 +291,6 @@ class TaskController extends BaseController
         ]);
 
         $this->tasks->logHistory($id, $_SESSION['user_id'], 'Attachment added', null, null, $file['name']);
-
-        try {
-            EmailService::sendFileAttached($id, $file['name'], (int)$_SESSION['user_id']);
-        } catch (Throwable $e) {
-            error_log('Attachment email failed: ' . $e->getMessage());
-        }
-
         $this->flash('success', 'Attachment uploaded.');
         $this->redirect('/tasks/' . $id . '#attachments');
     }
