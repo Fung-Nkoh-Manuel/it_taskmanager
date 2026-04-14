@@ -21,9 +21,8 @@ class Mailer
             return false;
         }
 
-        $fromEmail = defined('MAIL_FROM')       ? MAIL_FROM       : 'no-reply@' . ($_SERVER['HTTP_HOST'] ?? 'localhost');
-        $fromName  = defined('MAIL_FROM_NAME')  ? MAIL_FROM_NAME  : (defined('APP_NAME') ? APP_NAME : 'IT TaskManager');
-
+        $fromEmail = MAIL_FROM;
+        $fromName  = MAIL_FROM_NAME;
         $plainText = self::htmlToText($htmlBody);
         $boundary  = '=_Part_' . md5(uniqid('', true));
 
